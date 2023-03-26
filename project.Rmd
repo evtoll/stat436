@@ -1,0 +1,117 @@
+---
+title: "project_milestone2"
+output: html_document
+date: "2023-03-25"
+---
+
+```{r, fig.width= 5, fig.height= 4}
+library(tidyverse)
+library(tsibble)
+library(shiny)
+library(shinyWidgets)
+
+data = read_csv("https://uwmadison.box.com/shared/static/w9v71xbpuvb6kuilm6bfiz9va5lvfn08.csv")
+
+
+data = data %>%
+  rename(Carbon_Dioxide = "Carbon dioxide_value") %>%
+  rename(Nitrous_Oxide = "Nitrous oxide_Value") %>%
+  rename(Methane = Methane_Value) %>%
+  pivot_longer(cols = c("Carbon_Dioxide", "Methane", "Nitrous_Oxide"), names_to = "Type", values_to = "Value") %>%
+  select(Country, Year, Environmental_Policy_Stringency_Value, Type, Value)
+
+
+types <- pull(data, Type) %>%
+   unique() %>%
+   na.omit()
+
+countries <- pull(data, Country) %>%
+   unique() %>%
+   na.omit()
+
+  
+ ui <- fluidPage(
+   setBackgroundColor(
+    color = "lightgreen",
+    gradient = c("linear", "radial"),
+    direction = c("bottom", "top", "right", "left"),
+    shinydashboard = FALSE),
+   
+
+    headerPanel("Global Greenhouse Gas Emmisions by Country"),
+   
+    mainPanel("This data represents greenhouse gas emmisions of countries from the years of 1990-2020.
+              
+Users can select one type of emmision source and a time range to depict on the graph below. The heat map shows the value for the selected emmision type and the bar graph shows the average of all the emiision types over the given time range, 
+
+Note: There are some datapoints missing for certain types of CO2 emission sources for some years and countries.",
+   
+    tags$head(tags$style(HTML('* {font-family: "Comic Sans"};'))),
+      
+    helpText("Create a heat map and bar graph visualizing the type of emmissions for countries with a specified time periods."),
+
+      tabsetPanel(
+        tabPanel("Heat Map", plotOutput("heat")), 
+        tabPanel("Bar Graph", plotOutput("bar"))
+        )),
+  
+
+  sidebarPanel(
+    sliderInput("slider", label = h4("Year Range"), min = 1990, 
+        max = 2020, value = c(1990, 2020)),
+
+    selectInput("types", "Type", types, 
+                selected = "Carbon_Dioxide",
+                multiple = FALSE)
+    
+
+))
+ 
+
+
+
+ server <- function(input, output) {
+   output$heat <- renderPlot({
+    data %>%
+       filter(Year >= input$slider[1],
+              Year <= input$slider[2],
+              Type == input$types) %>%
+      ggplot( aes(Year, y = reorder(Country, desc(-Value)))) +
+        geom_tile(aes(fill = Value)) +
+        scale_fill_viridis_c(option = "F") +
+        theme(panel.grid.major = element_blank(),
+            plot.background = element_rect(fill='transparent',color="grey")) +
+        scale_x_continuous(expand = c(0,0)) +
+        ylab("Country") +
+        labs(title= "Country's Emissions",
+            xlab = "Year", ylab = "Kilotons") 
+   }
+   )
+  output$bar<- renderPlot({
+    data %>%
+      filter(
+             Year >= input$slider[1],
+             Year <= input$slider[2],
+            ) %>%
+      group_by(Country, Type) %>%
+      mutate(Average = mean(Value)) %>%
+      arrange(desc(Average)) %>%
+      ggplot(aes(x=Average, y=reorder(Country, desc(-Average)), fill = Type)) +
+        geom_bar(position = "stack", stat="identity")+
+        labs(title= "Average Emmisions Over the Given Time Range",
+            xlab = "Type")+
+        ylab("Average Emissions (Kilotons)") +
+        theme_bw() +
+        scale_fill_brewer(palette="Dark2") +
+        scale_x_continuous(expand = c(0,0)) +
+        theme(plot.background = element_rect(fill='transparent', color="grey"))
+    
+  } )
+   }
+ 
+app <- shinyApp(ui, server)
+
+app
+```
+
+
